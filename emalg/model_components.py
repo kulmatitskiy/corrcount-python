@@ -6,16 +6,17 @@ from scipy.stats import poisson
 class ModelComponent(object):
     main_axis = None
     is_latent = False
+
     def __init__(self, count_data, num_segments=2):
         super(ModelComponent, self).__init__()
         self.count_data = count_data
         self.num_segments = num_segments
 
     def params(self):
-        return NotImplementedError()
+        raise NotImplementedError()
 
     def get_conditionals(self):
-        return NotImplementedError()
+        raise NotImplementedError()
 
     def use_posteriors(self, posteriors, obtained_from):
         pass
