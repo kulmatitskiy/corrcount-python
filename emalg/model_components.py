@@ -20,12 +20,12 @@ class SegmentComponent(ModelComponent):
 
     def __init__(self, count_data, num_segments=2):
         super(SegmentComponent, self).__init__(count_data, num_segments)
+        self.seg_probs = self.generate_initial_estimates()
 
-        tmp = 0.8 * random.ranf(size=num_segments) + 0.1
-        self.seg_probs = tmp / tmp.sum()
-
-        #self.seg_probs = np.ones(num_segments, dtype='float64') / num_segments
+    def generate_initial_estimates(self):
         # TODO: init params using data (k-means?)
+        tmp = 0.8 * random.ranf(size=self.num_segments) + 0.1
+        return tmp / tmp.sum()
 
     def params(self):
         return self.seg_probs
@@ -48,19 +48,22 @@ class PoissonComponentWithLatentClasses(ModelComponent):
 
     def __init__(self, count_data, num_segments=2):
         super(PoissonComponentWithLatentClasses, self).__init__(count_data, num_segments)
+        self.lambdas = self.generate_initial_estimates()
 
+    def generate_initial_estimates(self):
         # lambdas is S-by-K matrix
-        K = count_data.num_categories
-        self.lambdas = self.initial_estimates().repeat(num_segments).reshape([num_segments, K], order='F')
-        self.lambdas += random.ranf(size=self.lambdas.size).reshape(self.lambdas.shape)
+        K = self.count_data.num_categories
+        lambdas = self.global_means_by_category().repeat(self.num_segments).reshape([self.num_segments, K], order='F')
+        lambdas += random.ranf(size=lambdas.size).reshape(lambdas.shape)
+        return lambdas
 
-    def initial_estimates(self):
+    def global_means_by_category(self):
         return self.count_data.arr.mean(axis=0) # todo: use freqs
 
     def params(self):
         return self.lambdas
 
-    def poisson_prob_table(self, means):
+    def poisson_prob_arr(self, means):
         # count_data must be N-by-K matrix of counts per observation N, category K
         # means must be S-by-K matrix of poisson means per segment C, category K
         # returns S-by-N-by-K probability table of observed count_data (given each segment)
@@ -70,7 +73,7 @@ class PoissonComponentWithLatentClasses(ModelComponent):
         return poisson(means).pmf(counts)
 
     def prob_table(self):
-        return Table(self.poisson_prob_table(self.lambdas), axes=self.prob_table_axes)
+        return Table(self.poisson_prob_arr(self.lambdas), axes=self.prob_table_axes)
 
     def process_input(self, table, for_component):
         if isinstance(for_component, SegmentComponent):

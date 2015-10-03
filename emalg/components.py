@@ -3,8 +3,6 @@ from table import *
 
 
 class Component(object):
-    prob_table_axes = list()
-
     def __init__(self):
         pass
 
@@ -16,16 +14,24 @@ class ExpectedLogLikelihood(Component):
     def __init__(self, count_data, store_trace=False):
         super(ExpectedLogLikelihood, self).__init__()
         self.count_data = count_data
-        self.ll = 0
+        self.ll = None
+        self.last_ll = None
         self.trace = None
+        self.store_trace = store_trace
 
     def process_input(self, input_table, for_component):
         if for_component is self:
-            if self.trace is None:
-                self.trace = list()
-            else:
-                self.trace.append(self.ll)
+            if self.store_trace:
+                if self.trace is None:
+                    self.trace = list()
+                else:
+                    self.trace.append(self.ll)
+
+            if self.ll is not None:
+                self.last_ll = self.ll
+
             self.ll = 0
+
         elif input_table is not None:
             n = self.count_data.N_all
             self.ll += input_table.arr.sum() / n # todo: utilize freqs
@@ -69,5 +75,3 @@ class ConditionalsMaker(Component):
         out_conditionals = Conditionals(out_prob_arr, out_axes)
         out_conditionals.on_bad_observations_trigger = self.on_bad_observations_trigger
         return out_conditionals
-
-
