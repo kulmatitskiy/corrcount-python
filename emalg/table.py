@@ -1,7 +1,6 @@
 from __future__ import division
 import numpy as np
-import logging
-import sys
+from misc import *
 
 # Axes
 
@@ -9,7 +8,6 @@ class Axis(object):
     def __init__(self, name, type):
         self.name = name
         self.type = type
-        #self.size = size
 
 indep_observation_axis_type, joint_axis_type, sample_space_axis_type, MC_axis_type = range(4)
 
@@ -18,6 +16,9 @@ categories_axis = Axis("categories", joint_axis_type)
 segments_axis = Axis("segments", sample_space_axis_type)
 didBuy_axis = Axis("didBuy", sample_space_axis_type)
 
+
+class MissingObservationAxisError(Exception):
+    pass
 
 
 '''
@@ -73,10 +74,18 @@ class Table(object):
 
             self._scaled_cache[cache_key] = out
             #Conditionals(out, self.axes, self.on_bad_observations_trigger)
-        return out_table_class(self._scaled_cache[cache_key], self.axes)
+        return Table(self._scaled_cache[cache_key], self.axes)
 
     def _on_scaled_nan(self, scaled_arr):
         raise Exception() # Absract method (Base class Table does not know what to do with scaled NaNs
+
+    def get_observations_inds(self, boolean_mask):
+        if observations_axis not in self.axes:
+            raise MissingObservationAxisError()
+
+        observations_axis_ind = self.axes.index(observations_axis)
+        required_obs_inds = list(set(np.where(boolean_mask)[observations_axis_ind]))
+        return observations_axis_ind, required_obs_inds
 
     def remove(self, indices, from_axis):
         if from_axis not in self.axes:
@@ -88,27 +97,6 @@ class Table(object):
         self.arr = np.delete(self.arr, indices, axis_ind)
         return removed
 
-class Conditionals(Table):
-
-    def __init__(self, arr, axes):
-        super(Conditionals, self).__init__(arr, axes)
-        self.on_bad_observations_trigger = lambda *args: None
-
-    def _on_scaled_nan(self, scaled_arr):
-        try:
-            observations_axis_ind = [i for i, ax in enumerate(self.axes) if ax == observations_axis][0]
-        except IndexError as e:
-            logging.error("Caught NaNs in a table of conditionals with Observations axis missing.")
-            sys.exit(1)
-
-        isnan = np.isnan(scaled_arr)
-        bad_obs_inds = list(set(np.where(isnan)[observations_axis_ind]))
-        out = np.delete(scaled_arr, list(bad_obs_inds), observations_axis_ind)
-        self.remove(bad_obs_inds, from_axis=observations_axis)
-        self.on_bad_observations_trigger(bad_obs_inds)
-        return out
-
-# Count Data (convenience object)
 
 class CountData(Table):
     def __init__(self, data_frame):
@@ -128,3 +116,60 @@ class CountData(Table):
     def exclude_observations(self, indices=[]):
         self.excluded_observations.append(self.remove(indices=indices, from_axis=observations_axis))
 
+    def remove(self, indices, from_axis):
+        if from_axis is not observations_axis:
+            raise Exception
+        else:
+            removed = super(CountData, self).remove(indices, from_axis=observations_axis)
+            self.excluded_observations.append(removed)
+
+
+class ProbTable(Table):
+    def __init__(self, count_data, conditionals):
+        self.count_data = count_data
+        super(ProbTable, self).__init__(conditionals.arr, conditionals.axes)
+
+    def update(self, conditionals):
+        axes = self.axes
+        axes_to_keep = conditionals.axes
+        tmp_prob_arr = self.arr
+
+        axes_to_sum_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type == sample_space_axis_type]
+        if len(axes_to_sum_over) > 0:
+            tmp_prob_arr = tmp_prob_arr.sum(axis=tuple(axes_to_sum_over))
+            axes = remove_indices(axes, axes_to_sum_over)
+
+        axes_to_mult_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type == joint_axis_type]
+        if len(axes_to_mult_over) > 0:
+            tmp_prob_arr = tmp_prob_arr.prod(axis=tuple(axes_to_mult_over))
+            axes = remove_indices(axes, axes_to_mult_over)
+
+        tmp_prob_arr = np.transpose(tmp_prob_arr, tuple([axes.index(ax) for ax in axes_to_keep]))
+        self.arr = tmp_prob_arr * conditionals.arr
+        self.axes = axes_to_keep
+
+
+class ExpLLTable(Table):
+    def __init__(self, count_data, conditionals):
+        self.count_data = count_data
+        super(ExpLLTable, self).__init__(np.log(conditionals.arr), conditionals.axes)
+
+    def update(self, conditionals, posteriors):
+        axes = self.axes
+        tmp_expll_arr = self.arr
+        axes_to_keep = conditionals.axes
+
+        axes_to_sum_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type in [sample_space_axis_type, joint_axis_type]]
+        if len(axes_to_sum_over) > 0:
+            tmp_expll_arr = tmp_expll_arr.sum(axis=tuple(axes_to_sum_over))
+            axes = remove_indices(axes, axes_to_sum_over)
+
+        # todo: axes_to_average_over (for MC trials)
+
+        tmp_expll_arr = np.transpose(tmp_expll_arr, tuple([axes.index(ax) for ax in axes_to_keep]))
+        tmp_expll_arr += np.log(conditionals.arr)
+        self.arr = tmp_expll_arr * posteriors.arr
+        self.axes = axes_to_keep
+
+    def get_ll(self):
+        return self.arr.sum() / self.count_data.N_all

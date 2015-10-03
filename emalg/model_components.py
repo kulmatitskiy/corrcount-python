@@ -1,9 +1,11 @@
 from numpy import random
 from table import *
-from components import Component
 from scipy.stats import poisson
 
-class ModelComponent(Component):
+
+class ModelComponent(object):
+    main_axis = None
+    is_latent = False
     def __init__(self, count_data, num_segments=2):
         super(ModelComponent, self).__init__()
         self.count_data = count_data
@@ -12,11 +14,18 @@ class ModelComponent(Component):
     def params(self):
         return NotImplementedError()
 
-    def prob_table(self):
+    def get_conditionals(self):
         return NotImplementedError()
 
+    def use_posteriors(self, posteriors, obtained_from):
+        pass
+
+
+
 class SegmentComponent(ModelComponent):
-    prob_table_axes = [observations_axis, segments_axis]
+    main_axis = segments_axis
+    is_latent = True
+    conditionals_axes = [observations_axis, segments_axis]
 
     def __init__(self, count_data, num_segments=2):
         super(SegmentComponent, self).__init__(count_data, num_segments)
@@ -30,21 +39,26 @@ class SegmentComponent(ModelComponent):
     def params(self):
         return self.seg_probs
 
-    def prob_table(self):
+    def get_conditionals(self):
         n, _ = self.count_data.arr.shape
-        return Table(self.seg_probs.repeat(n).reshape(n, self.num_segments, order='F'), axes=self.prob_table_axes)
+        return Table(self.seg_probs.repeat(n).reshape(n, self.num_segments, order='F'), axes=self.conditionals_axes)
 
-    def process_input(self, table, for_component):
+    def process_prob_table(self, table, for_component, expll_table=None):
         if for_component is self:
             posteriors = table.get_scaled(axes_to_sum_over=[segments_axis])
             n, _ = self.count_data.arr.shape
             self.seg_probs = posteriors.get_arr([segments_axis], apply_func=np.sum) / n
         return table
 
+    def use_posteriors(self, posteriors, obtained_from):
+        if obtained_from is self:
+            n, _ = self.count_data.arr.shape
+            self.seg_probs = posteriors.get_arr([segments_axis], apply_func=np.sum) / n
+
 
 
 class PoissonComponentWithLatentClasses(ModelComponent):
-    prob_table_axes = [segments_axis, observations_axis, categories_axis]
+    conditionals_axes = [segments_axis, observations_axis, categories_axis]
 
     def __init__(self, count_data, num_segments=2):
         super(PoissonComponentWithLatentClasses, self).__init__(count_data, num_segments)
@@ -72,10 +86,10 @@ class PoissonComponentWithLatentClasses(ModelComponent):
         counts = counts.reshape([1] + list(counts.shape))
         return poisson(means).pmf(counts)
 
-    def prob_table(self):
-        return Table(self.poisson_prob_arr(self.lambdas), axes=self.prob_table_axes)
+    def get_conditionals(self):
+        return Table(self.poisson_prob_arr(self.lambdas), axes=self.conditionals_axes)
 
-    def process_input(self, table, for_component):
+    def process_prob_table(self, table, for_component, expll_table=None):
         if isinstance(for_component, SegmentComponent):
             segm_posteriors = table.get_scaled(axes_to_sum_over=[segments_axis])
             segm_posteriors_mat = segm_posteriors.get_arr([segments_axis, observations_axis])  # S-by-N
@@ -87,12 +101,21 @@ class PoissonComponentWithLatentClasses(ModelComponent):
 
         return table
 
+    def use_posteriors(self, posteriors, obtained_from):
+        if isinstance(obtained_from, SegmentComponent):
+            segm_posteriors_mat = posteriors.get_arr([segments_axis, observations_axis])  # S-by-N
+            segm_posteriors_sums = posteriors.get_arr([segments_axis], apply_func=np.sum) # S-vec
+
+            S = len(segm_posteriors_sums)
+
+            SC = np.dot(segm_posteriors_mat, self.count_data.arr) # SC is S-by-K
+            self.lambdas = SC / segm_posteriors_sums.reshape(S, 1)
 
 
 
 #
 # class BuyComponent(NetworkComponent):
-#     prob_table_axes = [segments_axis, categories_axis, didBuy_axis]
+#     conditionals_axes = [segments_axis, categories_axis, didBuy_axis]
 #     prob_table_dim_names = ["segments", "categories", "didBuy"]
 #
 #     def __init__(self, num_segments, count_data):
@@ -103,13 +126,13 @@ class PoissonComponentWithLatentClasses(ModelComponent):
 #         # params is C-by-K matrix of "buy probabilities" of making a purchase in category K being in segment C
 #         self.params = ((count_data>0).sum(axis=0)/N).repeat(num_segments).reshape([num_segments, K], order='F')
 #
-#     def prob_table(self, data):
+#     def get_conditionals(self, data):
 #         return np.transpose(np.array([self.params, 1-self.params]), [1, 2, 0])
 #
 #
 #
 # class InflatedZerosPoissonComponent(PoissonComponent):
-#     prob_table_axes = [segments_axis, didBuy_axis, observations_axis, categories_axis]
+#     conditionals_axes = [segments_axis, didBuy_axis, observations_axis, categories_axis]
 #     prob_table_dim_names = ["segments", "didBuy", "observations", "categories"]
 #
 #     def initial_estimates(self, count_data):
@@ -117,7 +140,7 @@ class PoissonComponentWithLatentClasses(ModelComponent):
 #
 #
 #
-#     def prob_table(self, count_data):
+#     def get_conditionals(self, count_data):
 #         # count_data is N-by-K
 #         # must return S-by-2-by-N-by-K
 #         poisson = self.poisson_prob_table(count_data, self.params) # S-by-N-by-K
