@@ -21,7 +21,6 @@ class ModelComponent(object):
         pass
 
 
-
 class SegmentComponent(ModelComponent):
     main_axis = segments_axis
     is_latent = True
@@ -43,18 +42,10 @@ class SegmentComponent(ModelComponent):
         n, _ = self.count_data.arr.shape
         return Table(self.seg_probs.repeat(n).reshape(n, self.num_segments, order='F'), axes=self.conditionals_axes)
 
-    def process_prob_table(self, table, for_component, expll_table=None):
-        if for_component is self:
-            posteriors = table.get_scaled(axes_to_sum_over=[segments_axis])
-            n, _ = self.count_data.arr.shape
-            self.seg_probs = posteriors.get_arr([segments_axis], apply_func=np.sum) / n
-        return table
-
     def use_posteriors(self, posteriors, obtained_from):
         if obtained_from is self:
             n, _ = self.count_data.arr.shape
             self.seg_probs = posteriors.get_arr([segments_axis], apply_func=np.sum) / n
-
 
 
 class PoissonComponentWithLatentClasses(ModelComponent):
@@ -89,18 +80,6 @@ class PoissonComponentWithLatentClasses(ModelComponent):
     def get_conditionals(self):
         return Table(self.poisson_prob_arr(self.lambdas), axes=self.conditionals_axes)
 
-    def process_prob_table(self, table, for_component, expll_table=None):
-        if isinstance(for_component, SegmentComponent):
-            segm_posteriors = table.get_scaled(axes_to_sum_over=[segments_axis])
-            segm_posteriors_mat = segm_posteriors.get_arr([segments_axis, observations_axis])  # S-by-N
-            segm_posteriors_sums = segm_posteriors.get_arr([segments_axis], apply_func=np.sum) # S-vec
-            S = len(segm_posteriors_sums)
-
-            SC = np.dot(segm_posteriors_mat, self.count_data.arr) # SC is S-by-K
-            self.lambdas = SC / segm_posteriors_sums.reshape(S, 1)
-
-        return table
-
     def use_posteriors(self, posteriors, obtained_from):
         if isinstance(obtained_from, SegmentComponent):
             segm_posteriors_mat = posteriors.get_arr([segments_axis, observations_axis])  # S-by-N
@@ -110,6 +89,8 @@ class PoissonComponentWithLatentClasses(ModelComponent):
 
             SC = np.dot(segm_posteriors_mat, self.count_data.arr) # SC is S-by-K
             self.lambdas = SC / segm_posteriors_sums.reshape(S, 1)
+
+
 
 
 
