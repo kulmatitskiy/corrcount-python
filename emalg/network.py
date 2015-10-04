@@ -1,12 +1,25 @@
 from table import *
+from zero_inflater import ZeroInflaterComponent
+from poisson import PoissonComponentWithLatentClasses
 import logging
 import numpy as np
 
 class Network(object):
-    def __init__(self, component_classes, count_data, num_segments):
+    def __init__(self, component_classes, data, num_segments):
         self.num_segments = num_segments
-        self.count_data = count_data
-        self.components = [C(count_data=count_data, num_segments=num_segments) for C in component_classes]
+        self.count_data = CountData(data)
+
+        components = list()
+        inflated_zeros = False
+        for comp_class in component_classes:
+            if comp_class is ZeroInflaterComponent:
+                inflated_zeros = True
+
+            if comp_class is PoissonComponentWithLatentClasses and inflated_zeros:
+                components.append(comp_class(self.count_data, num_segments, True))
+            else:
+                components.append(comp_class(self.count_data, num_segments))
+        self.components = components
 
     def check_zeros(self, in_table, affected_tables):
         zero_probs_mask = (in_table.arr == 0)
@@ -49,17 +62,40 @@ class Network(object):
 
         return expll_table.get_ll()
 
-    def run(self, threshold=1e-8, max_iterations = 200):
+    def run(self, threshold=1e-12, max_iterations=250):
         e_ll = -np.inf
         e_ll_trace = []
         for i in range(max_iterations):
             prev_e_ll = e_ll
             e_ll = self.run_once()
             e_ll_trace.append(e_ll)
+            logging.info("Iteration %d trying to improve %f." % (i, e_ll))
             if e_ll < prev_e_ll:
                 logging.warning("Expected ll value DECREASED at iteration %d." % i)
             if abs(e_ll - prev_e_ll) <= threshold:
                 break
-        print(e_ll_trace)
+
+        self.e_ll_trace = e_ll_trace
+
+    def get_excluded_observations(self):
+        return self.count_data.excluded_observations
+
+    def get_total_number_of_params(self):
+        return sum([c.params().size for c in self.components])
+
+    def fitted_component_info(self, comp_ind):
+        component_wanted = self.components[comp_ind]
+        for i in range(comp_ind+1):
+            prev_component = self.components[i]
+            component_wanted.use_params_for_fitted_info(prev_component.params(), from_component=prev_component)
+        return component_wanted.fitted_info()
+
+    def fitted_component_plots(self, comp_ind):
+        component_wanted = self.components[comp_ind]
+        for i in range(comp_ind+1):
+            prev_component = self.components[i]
+            component_wanted.use_params_for_fitted_plots(prev_component.params(), from_component=prev_component)
+        return component_wanted.fitted_plots()
+
 
 

@@ -102,6 +102,7 @@ class CountData(Table):
     def __init__(self, data_frame):
         counts = data_frame.values
         N_all, K = counts.shape
+        self.category_names = data_frame.columns
         self.N_all = N_all
         self.N = N_all
         self.num_categories = K
@@ -112,6 +113,10 @@ class CountData(Table):
         self.arr = counts
 
         self.excluded_observations = list()
+
+    def number_of_observations(self):
+        n, k = self.arr.shape
+        return n # todo: use freqs
 
     def exclude_observations(self, indices=[]):
         self.excluded_observations.append(self.remove(indices=indices, from_axis=observations_axis))
