@@ -43,12 +43,22 @@ class Network(object):
 
     def run_once(self):
         reversed_components = list(reversed(self.components))
+
+        monte_carlo_table = None
+        for mc_component in [c for c in self.components if c.is_latent and c.main_axis.type == MC_axis_type]:
+            if monte_carlo_table is None:
+                monte_carlo_table = mc_component.get_monte_carlo_table()
+            else:
+                monte_carlo_table.update(mc_component.get_monte_carlo_table())
+
         prob_table = None
         expll_table = None
-        posteriors_table = None
         for i, component in enumerate(reversed_components):
 
-            # 1. Use current component's get_conditionals to update probability table
+            if monte_carlo_table is not None:
+                component.use_monte_carlo_table(monte_carlo_table)
+
+            # 1. Use current component's conditionals to update probability table
             conditionals = component.get_conditionals()
 
             self.check_zeros(in_table=conditionals, affected_tables=[self.count_data, expll_table],

@@ -178,3 +178,11 @@ class ExpLLTable(Table):
 
     def get_ll(self):
         return self.arr.sum() / self.count_data.N_all
+
+class MonteCarloTable(Table):
+    def __init__(self, samples, axes):
+        self.samples = samples
+        super(ProbTable, self).__init__(samples, axes)
+
+    def update(self, other_monte_carlo_table):
+        raise NotImplementedError()
