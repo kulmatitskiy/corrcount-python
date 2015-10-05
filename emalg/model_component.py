@@ -18,6 +18,12 @@ class ModelComponent(object):
     def get_conditionals(self):
         raise NotImplementedError()
 
+    def get_monte_carlo_table(self):
+        raise NotImplementedError()
+
+    def use_monte_carlo_table(self, monte_carlo_table):
+        pass
+
     def use_posteriors(self, posteriors, obtained_from):
         if obtained_from is self:
             self.posteriors = posteriors
