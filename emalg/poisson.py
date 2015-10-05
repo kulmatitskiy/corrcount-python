@@ -47,7 +47,7 @@ class PoissonComponentWithLatentClasses(ModelComponent):
         # count_data must be N-by-K matrix of counts per observation N, category K
         # means must be S-by-K matrix of poisson means per segment C, category K
         # returns S-by-N-by-K probability table of observed count_data (given each segment)
-        means = np.transpose(means.reshape([1] + list(means.shape)), [1,0,2]) # (1,S,K)
+        means = np.transpose(means.reshape([1] + list(means.shape)), [1, 0, 2])  # (1,S,K)
         counts = self.count_data.arr
         counts = counts.reshape([1] + list(counts.shape))
         return poisson(means).pmf(counts)
@@ -120,10 +120,10 @@ class PoissonComponentWithLatentClasses(ModelComponent):
         for cat in range(self.count_data.num_categories):
             counts_observed = [(self.count_data.arr[:, cat] == count).sum() for count in count_range]
 
-            poisson_means = self.lambdas[:,cat].reshape(self.num_segments, 1)  # S-by-1
+            poisson_means = self.lambdas[:, cat].reshape(self.num_segments, 1)  # S-by-1
             poisson_pmf = poisson(poisson_means).pmf(nbs)  # S-by-m
             if self.inflated_zeros:
-                deflate_probs = self.deflate_probs[:, cat].reshape(self.num_segments, 1)
+                deflate_probs = self.deflate_probs[:, cat].reshape(self.num_segments, 1)  # S-by-1
                 poisson_pmf *= deflate_probs
                 poisson_pmf += (1-deflate_probs) * poisson(1e-2).pmf(nbs)
             counts_predicted = (poisson_pmf * segment_probs).sum(axis=0) * n

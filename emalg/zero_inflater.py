@@ -58,39 +58,3 @@ class ZeroInflaterComponent(ModelComponent):
     def fitted_info(self):
         return pd.DataFrame(data=np.round(self.deltas, 2), index=self.segment_names, columns=self.count_data.category_names)
 
-
-
-    #
-    # def __init__(self, num_segments, count_data):
-    #     N, K = count_data.shape # count_data must be N-by-K, where K = number of categories
-    #     self.num_segments = num_segments
-    #     self.num_categories = K
-    #
-    #     # params is C-by-K matrix of "buy probabilities" of making a purchase in category K being in segment C
-    #     self.params = ((count_data>0).sum(axis=0)/N).repeat(num_segments).reshape([num_segments, K], order='F')
-    #
-    # def get_conditionals(self, data):
-    #     return np.transpose(np.array([self.params, 1-self.params]), [1, 2, 0])
-# #
-#
-#
-# class InflatedZerosPoissonComponent(PoissonComponent):
-#     conditionals_axes = [segments_axis, didBuy_axis, observations_axis, categories_axis]
-#     prob_table_dim_names = ["segments", "didBuy", "observations", "categories"]
-#
-#     def initial_estimates(self, count_data):
-#         return count_data.sum(axis=0) / (count_data>0).sum(axis=0)
-#
-#
-#
-#     def get_conditionals(self, count_data):
-#         # count_data is N-by-K
-#         # must return S-by-2-by-N-by-K
-#         poisson = self.poisson_prob_table(count_data, self.params) # S-by-N-by-K
-#
-#         counts = count_data.reshape([1] + list(count_data.shape))
-#         no_buy = np.power(poisson * 0, counts) # S-by-N-by-K
-#
-#         return np.array([poisson, no_buy]).swapaxes(0,1)
-
-
