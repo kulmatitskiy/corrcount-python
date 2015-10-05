@@ -9,10 +9,10 @@ class Axis(object):
         self.name = name
         self.type = type
 
-indep_observation_axis_type, joint_axis_type, sample_space_axis_type, MC_axis_type = range(4)
+indep_observation_axis_type, joint_indep_axis_type, joint_dep_axis_type, sample_space_axis_type, MC_axis_type = range(5)
 
 observations_axis = Axis("observations", indep_observation_axis_type)
-categories_axis = Axis("categories", joint_axis_type)
+categories_axis = Axis("categories", joint_indep_axis_type)
 segments_axis = Axis("segments", sample_space_axis_type)
 didBuy_axis = Axis("didBuy", sample_space_axis_type)
 
@@ -144,7 +144,7 @@ class ProbTable(Table):
             tmp_prob_arr = tmp_prob_arr.sum(axis=tuple(axes_to_sum_over))
             axes = remove_indices(axes, axes_to_sum_over)
 
-        axes_to_mult_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type == joint_axis_type]
+        axes_to_mult_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type == joint_indep_axis_type]
         if len(axes_to_mult_over) > 0:
             tmp_prob_arr = tmp_prob_arr.prod(axis=tuple(axes_to_mult_over))
             axes = remove_indices(axes, axes_to_mult_over)
@@ -164,7 +164,7 @@ class ExpLLTable(Table):
         tmp_expll_arr = self.arr
         axes_to_keep = conditionals.axes
 
-        axes_to_sum_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type in [sample_space_axis_type, joint_axis_type]]
+        axes_to_sum_over = [i for i, ax in enumerate(axes) if ax not in axes_to_keep and ax.type in [sample_space_axis_type, joint_indep_axis_type]]
         if len(axes_to_sum_over) > 0:
             tmp_expll_arr = tmp_expll_arr.sum(axis=tuple(axes_to_sum_over))
             axes = remove_indices(axes, axes_to_sum_over)
