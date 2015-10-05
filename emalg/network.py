@@ -5,9 +5,10 @@ import logging
 import numpy as np
 
 class Network(object):
-    def __init__(self, component_classes, data, num_segments):
+    def __init__(self, component_classes, data, num_segments, dealing_with_zero_probs='force'):
         self.num_segments = num_segments
         self.count_data = CountData(data)
+        self.dealing_with_zero_probs = dealing_with_zero_probs
 
         components = list()
         inflated_zeros = False
@@ -21,13 +22,24 @@ class Network(object):
                 components.append(comp_class(self.count_data, num_segments))
         self.components = components
 
-    def check_zeros(self, in_table, affected_tables):
+    def check_zeros(self, in_table, affected_tables, check_sums_for_axis=None):
         zero_probs_mask = (in_table.arr == 0)
+
         if zero_probs_mask.any():
-            _, bad_obs_inds = in_table.get_observations_inds(zero_probs_mask)
-            for table in set([in_table] + affected_tables):
-                if table is not None:
-                    table.remove(bad_obs_inds, observations_axis)
+            if self.dealing_with_zero_probs == 'force':
+                in_table.arr[zero_probs_mask] == 1e-4
+
+            elif self.dealing_with_zero_probs == 'exclude':
+                if check_sums_for_axis is not None:
+                    raise NotImplementedError() # todo: implement removal of just those obs where sum(prob) is zero
+                else:
+                    _, bad_obs_inds = in_table.get_observations_inds(zero_probs_mask)
+
+                for table in set([in_table] + affected_tables):
+                    if table is not None:
+                        table.remove(bad_obs_inds, observations_axis)
+            else:
+                raise Exception()  # unknown way of dealing with zero probabilities
 
     def run_once(self):
         reversed_components = list(reversed(self.components))
@@ -40,6 +52,8 @@ class Network(object):
             conditionals = component.get_conditionals()
 
             self.check_zeros(in_table=conditionals, affected_tables=[self.count_data, expll_table])
+            self.check_zeros(in_table=conditionals, affected_tables=[self.count_data, expll_table],
+                             check_sums_for_axis=component.main_axis)
 
             if prob_table is None:
                 prob_table = ProbTable(self.count_data, conditionals)
