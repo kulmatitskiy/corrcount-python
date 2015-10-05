@@ -7,9 +7,13 @@ class ModelComponent(object):
         super(ModelComponent, self).__init__()
         self.count_data = count_data
         self.num_segments = num_segments
+        self.saved_params = None
 
     def params(self):
         raise NotImplementedError()
+
+    def save_params(self):
+        self.saved_params = self.params()
 
     def get_conditionals(self):
         raise NotImplementedError()

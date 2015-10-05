@@ -62,20 +62,40 @@ class Network(object):
 
         return expll_table.get_ll()
 
-    def run(self, threshold=1e-12, max_iterations=250):
-        e_ll = -np.inf
-        e_ll_trace = []
-        for i in range(max_iterations):
-            prev_e_ll = e_ll
-            e_ll = self.run_once()
-            e_ll_trace.append(e_ll)
-            logging.info("Iteration %d trying to improve %f." % (i, e_ll))
-            if e_ll < prev_e_ll:
-                logging.warning("Expected ll value DECREASED at iteration %d." % i)
-            if abs(e_ll - prev_e_ll) <= threshold:
-                break
+    def run(self, threshold=1e-12, max_iterations=250, num_attempts=1, store_traces=False):
+        e_ll_traces = list()
+        e_ll_best = -np.inf
+        for attempt in range(num_attempts):
+            e_ll = -np.inf
+            e_ll_trace = list()
+            for i in range(max_iterations):
+                prev_e_ll = e_ll
+                e_ll = self.run_once()  # <-- run once
 
-        self.e_ll_trace = e_ll_trace
+                if store_traces:
+                    e_ll_trace.append(e_ll)
+
+                logging.info("Iteration %d trying to improve %f." % (i, e_ll))
+
+                if e_ll < prev_e_ll:
+                    logging.warning("Expected ll value DECREASED at iteration %d." % i)
+
+                if np.isnan(e_ll).any():
+                    logging.error("Got NaN for likelihood! Abort attempt.")
+                    break
+
+                if abs(e_ll - prev_e_ll) <= threshold:
+                    break
+
+            e_ll_traces.append(e_ll_trace)
+
+            if e_ll > e_ll_best:
+                e_ll_best = e_ll
+                for component in self.components:
+                    component.save_params()
+
+        self.e_ll_traces = e_ll_traces
+        self.e_ll_best = e_ll_best
 
     def get_excluded_observations(self):
         return self.count_data.excluded_observations
