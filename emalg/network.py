@@ -51,7 +51,6 @@ class Network(object):
             # 1. Use current component's get_conditionals to update probability table
             conditionals = component.get_conditionals()
 
-            self.check_zeros(in_table=conditionals, affected_tables=[self.count_data, expll_table])
             self.check_zeros(in_table=conditionals, affected_tables=[self.count_data, expll_table],
                              check_sums_for_axis=component.main_axis)
 
